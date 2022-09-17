@@ -61,9 +61,13 @@ module Ast_to_sexp = struct
         List
           [ Atom "paragraph"; List (List.map (at.at (inline_element at)) es) ]
     | `Math_block s -> List [ Atom "math_block"; Atom s ]
-    | `Code_block (None, c) -> List [ Atom "code_block"; at.at str c ]
-    | `Code_block (Some meta, c) ->
+    | `Code_block (None, c, None) -> List [ Atom "code_block"; at.at str c ]
+    | `Code_block (Some meta, c, None) ->
         List [ Atom "code_block"; code_block_meta at meta; at.at str c ]
+    | `Code_block (Some meta, c, Some output) -> 
+        List [ Atom "code_block"; code_block_meta at meta; at.at str c; List (List.map (fun v -> nestable_block_element at v.Loc.value) output)]
+    | `Code_block (None, _c, Some _output) -> 
+        List [ Atom "code_block_err" ]
     | `Verbatim t -> List [ Atom "verbatim"; Atom t ]
     | `Modules ps -> List [ Atom "modules"; List (List.map (at.at str) ps) ]
     | `List (kind, weight, items) ->
@@ -2599,6 +2603,19 @@ let%expect_test _ =
              (((f.ml (1 2) (1 7)) ocaml)
               (((f.ml (1 8) (1 28)) "env=f1 version>=4.06")))
              ((f.ml (1 30) (1 44)) "code goes here")))))
+         (warnings ())) |}]
+
+    let code_block_with_output =
+      test "{@ocaml[foo]@\noutput {b foo}}\nbaz";
+      [%expect
+        {|
+        ((output
+          (((f.ml (1 0) (1 13))
+            (code_block (((f.ml (1 2) (1 7)) ocaml) ()) ((f.ml (1 8) (1 11)) foo)
+             ((paragraph
+               (((f.ml (2 0) (2 6)) (word output)) ((f.ml (2 6) (2 7)) space)
+                ((f.ml (2 7) (2 14)) (bold (((f.ml (2 10) (2 13)) (word foo))))))))))
+           ((f.ml (3 0) (3 3)) (paragraph (((f.ml (3 0) (3 3)) (word baz)))))))
          (warnings ())) |}]
 
     let code_block_empty_meta =

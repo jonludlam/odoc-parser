@@ -457,6 +457,7 @@ type ('block, 'stops_at_which_tokens) context =
   | Top_level : (Ast.block_element, stops_at_delimiters) context
   | In_shorthand_list : (Ast.nestable_block_element, stopped_implicitly) context
   | In_explicit_list : (Ast.nestable_block_element, stops_at_delimiters) context
+  | In_code_results : (Ast.nestable_block_element, stops_at_delimiters) context
   | In_tag : (Ast.nestable_block_element, Token.t) context
 
 (* This is a no-op. It is needed to prove to the type system that nestable block
@@ -471,6 +472,7 @@ let accepted_in_all_contexts :
   | Top_level -> (block :> Ast.block_element)
   | In_shorthand_list -> block
   | In_explicit_list -> block
+  | In_code_results -> block
   | In_tag -> block
 
 (* Converts a tag to a series of words. This is used in error recovery, when a
@@ -561,7 +563,8 @@ let rec block_element_list :
         | Top_level -> (List.rev acc, next_token, where_in_line)
         | In_shorthand_list -> (List.rev acc, next_token, where_in_line)
         | In_explicit_list -> (List.rev acc, next_token, where_in_line)
-        | In_tag -> (List.rev acc, next_token, where_in_line))
+        | In_tag -> (List.rev acc, next_token, where_in_line)
+        | In_code_results -> (List.rev acc, next_token, where_in_line))
     (* Whitespace. This can terminate some kinds of block elements. It is also
        necessary to track it to interpret [`Minus] and [`Plus] correctly, as
        well as to ensure that all block elements begin on their own line. *)
@@ -626,6 +629,7 @@ let rec block_element_list :
             if where_in_line = `At_start_of_line then
               (List.rev acc, next_token, where_in_line)
             else recover_when_not_at_top_level context
+        | In_code_results -> recover_when_not_at_top_level context
         (* If this is the top-level call to [block_element_list], parse the
            tag. *)
         | Top_level -> (
@@ -727,8 +731,7 @@ let rec block_element_list :
         let block = Loc.at location block in
         let acc = block :: acc in
         consume_block_elements ~parsed_a_tag `After_text acc
-    | ( { value = `Code_block (_, { value = s; _ }) as token; location }
-      | { value = `Math_block s as token; location } ) as next_token ->
+      | { value = `Math_block s as token; location } as next_token ->
         warn_if_after_tags next_token;
         warn_if_after_text next_token;
         if s = "" then
@@ -740,6 +743,31 @@ let rec block_element_list :
         let block = Loc.at location block in
         let acc = block :: acc in
         consume_block_elements ~parsed_a_tag `After_text acc
+      | { value = `Code_block (meta, { value = s; location=v_loc }, has_outputs) as token; location } as next_token ->
+          warn_if_after_tags next_token;
+          warn_if_after_text next_token;
+          junk input;
+          let outputs, location =
+            if not has_outputs then (None, location) else
+              let content, _next_token, _where_in_line =
+               block_element_list In_code_results ~parent_markup:token input
+            in
+            junk input;
+            let locations = location :: (List.map (fun content -> content.Loc.location) content) in
+            let location = Loc.span locations in
+            let location = {location with end_={ location.end_ with column = location.end_.column + 1}} in
+            (Some content, location)
+          in
+
+
+          if s = "" then
+            Parse_error.should_not_be_empty ~what:(Token.describe token) location
+            |> add_warning input;
+  
+          let block = accepted_in_all_contexts context (`Code_block (meta, {value=s; location=v_loc}, outputs)) in
+          let block = Loc.at location block in
+          let acc = block :: acc in
+          consume_block_elements ~parsed_a_tag `After_text acc
     | { value = `Modules s as token; location } as next_token ->
         warn_if_after_tags next_token;
         warn_if_after_text next_token;
@@ -856,6 +884,7 @@ let rec block_element_list :
             else recover_when_not_at_top_level context
         | In_explicit_list -> recover_when_not_at_top_level context
         | In_tag -> recover_when_not_at_top_level context
+        | In_code_results -> recover_when_not_at_top_level context
         | Top_level ->
             if where_in_line <> `At_start_of_line then
               Parse_error.should_begin_on_its_own_line
@@ -914,6 +943,7 @@ let rec block_element_list :
     | Top_level -> `At_start_of_line
     | In_shorthand_list -> `After_shorthand_bullet
     | In_explicit_list -> `After_explicit_list_bullet
+    | In_code_results -> `After_tag
     | In_tag -> `After_tag
   in
 
