@@ -40,6 +40,7 @@ type nestable_block_element =
   | `Code_block of
     (string with_location * string with_location option) option
     * string with_location
+    * nestable_block_element with_location list option
     (* [(language tag * metadata option) option * content] *)
   | `Verbatim of string
   | `Modules of string with_location list

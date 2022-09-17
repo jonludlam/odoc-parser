@@ -63,7 +63,7 @@ type t =
   | (* Leaf block element markup. *)
     `Code_block of
     (string Loc.with_location * string Loc.with_location option) option
-    * string Loc.with_location
+    * string Loc.with_location * bool
   | `Verbatim of string
   | `Modules of string
   | (* List markup. *)

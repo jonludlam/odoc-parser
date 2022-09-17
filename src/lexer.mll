@@ -219,7 +219,7 @@ let emit_verbatim input start_offset buffer =
   let t = trim_trailing_blank_lines t in
   emit input (`Verbatim t) ~start_offset
 
-let emit_code_block ~start_offset input metadata c =
+let emit_code_block ~start_offset input metadata c has_results =
   let c = trim_trailing_blank_lines c in
   let c =
     with_location_adjustments
@@ -230,7 +230,7 @@ let emit_code_block ~start_offset input metadata c =
   in
   let c = trim_leading_blank_lines c in
   let c = with_location_adjustments ~adjust_end_by:"]}" (fun _ -> Loc.at) input c in
-  emit ~start_offset input (`Code_block (metadata, c))
+  emit ~start_offset input (`Code_block (metadata, c, has_results))
 
 let heading_level input level =
   if String.length level >= 2 && level.[0] = '0' then begin
@@ -262,7 +262,7 @@ let reference_start =
   "{!" | "{{!" | "{:" | "{{:"
 
 let code_block_text =
-  ([^ ']'] | ']'+ [^ ']' '}'])* ']'*
+  ([^ ']'] | ']'+ [^ ']' '}' '@'])* ']'*
 let raw_markup =
   ([^ '%'] | '%'+ [^ '%' '}'])* '%'*
 let raw_markup_target =
@@ -354,7 +354,7 @@ rule token input = parse
       in
       let emit_truncated_code_block () =
         let empty_content = with_location_adjustments (fun _ -> Loc.at) input "" in
-        emit ~start_offset input (`Code_block (Some (lang_tag, None), empty_content))
+        emit ~start_offset input (`Code_block (Some (lang_tag, None), empty_content, false))
       in
       match code_block_metadata_tail input lexbuf with
       | `Ok metadata -> code_block start_offset (Some (lang_tag, metadata)) input lexbuf
@@ -674,10 +674,12 @@ and code_block_metadata_tail input = parse
     { `Eof }
 
 and code_block start_offset metadata input = parse
+  | (code_block_text as c) "]@"
+    { emit_code_block ~start_offset input metadata c true}
   | (code_block_text as c) "]}"
-    { emit_code_block ~start_offset input metadata c }
+    { emit_code_block ~start_offset input metadata c false}
   | (code_block_text as c) eof
     {
       warning input ~start_offset Parse_error.truncated_code_block;
-      emit_code_block ~start_offset input metadata c
+      emit_code_block ~start_offset input metadata c false
     }
