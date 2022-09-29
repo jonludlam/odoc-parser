@@ -2610,7 +2610,7 @@ let%expect_test _ =
       [%expect
         {|
         ((output
-          (((f.ml (1 0) (1 13))
+          (((f.ml (1 0) (2 15))
             (code_block (((f.ml (1 2) (1 7)) ocaml) ()) ((f.ml (1 8) (1 11)) foo)
              ((paragraph
                (((f.ml (2 0) (2 6)) (word output)) ((f.ml (2 6) (2 7)) space)
