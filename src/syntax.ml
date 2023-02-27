@@ -537,6 +537,8 @@ type where_in_line =
    the block parser returns. *)
 type stops_at_delimiters = [ `End | `Right_brace ]
 
+type code_stop = [ `End | `Right_code_delimiter ]
+
 type stopped_implicitly =
   [ `End
   | `Blank_line of string
@@ -568,7 +570,7 @@ type ('block, 'stops_at_which_tokens) context =
   | In_shorthand_list : (Ast.nestable_block_element, stopped_implicitly) context
   | In_explicit_list : (Ast.nestable_block_element, stops_at_delimiters) context
   | In_table_cell : (Ast.nestable_block_element, stops_at_delimiters) context
-  | In_code_results : (Ast.nestable_block_element, stops_at_delimiters) context
+  | In_code_results : (Ast.nestable_block_element, code_stop) context
   | In_tag : (Ast.nestable_block_element, Token.t) context
 
 (* This is a no-op. It is needed to prove to the type system that nestable block
@@ -668,7 +670,16 @@ let rec block_element_list :
 
     match peek input with
     (* Terminators: the two tokens that terminate anything. *)
-    | ({ value = `End; _ } | { value = `Right_brace; _ }) as next_token -> (
+  
+    | ({ value = `End; _ } as next_token) -> (
+      match context with
+      | Top_level -> (List.rev acc, next_token, where_in_line)
+      | In_shorthand_list -> (List.rev acc, next_token, where_in_line)
+      | In_explicit_list -> (List.rev acc, next_token, where_in_line)
+      | In_tag -> (List.rev acc, next_token, where_in_line)
+      | In_table_cell ->  (List.rev acc, next_token, where_in_line)
+      | In_code_results -> (List.rev acc, next_token, where_in_line))
+    | { value = `Right_brace; _ } as next_token -> (
         (* This little absurdity is needed to satisfy the type system. Without it,
            OCaml is unable to prove that [stream_head] has the right type for all
            possible values of [context]. *)
@@ -678,7 +689,15 @@ let rec block_element_list :
         | In_explicit_list -> (List.rev acc, next_token, where_in_line)
         | In_table_cell -> (List.rev acc, next_token, where_in_line)
         | In_tag -> (List.rev acc, next_token, where_in_line)
-        | In_code_results -> (List.rev acc, next_token, where_in_line))
+        | In_code_results -> (
+          junk input;
+          consume_block_elements ~parsed_a_tag where_in_line acc))
+    | { value = `Right_code_delimiter; _ } as next_token -> (
+      match context with
+      | In_code_results -> (List.rev acc, next_token, where_in_line)
+      | _ -> (
+          junk input;
+          consume_block_elements ~parsed_a_tag where_in_line acc))
     (* Whitespace. This can terminate some kinds of block elements. It is also
        necessary to track it to interpret [`Minus] and [`Plus] correctly, as
        well as to ensure that all block elements begin on their own line. *)
@@ -884,7 +903,7 @@ let rec block_element_list :
         let block = Loc.at location block in
         let acc = block :: acc in
         consume_block_elements ~parsed_a_tag `After_text acc
-      | { value = `Code_block (meta, { value = s; location=v_loc }, has_outputs) as token; location } as next_token ->
+      | { value = `Code_block (meta, _delim, { value = s; location=v_loc }, has_outputs) as token; location } as next_token ->
           warn_if_after_tags next_token;
           warn_if_after_text next_token;
           junk input;

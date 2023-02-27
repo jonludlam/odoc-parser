@@ -2660,12 +2660,12 @@ let%expect_test _ =
          (warnings ())) |}]
 
     let code_block_with_output =
-      test "{@ocaml[foo]@\noutput {b foo}}\nbaz";
+      test "{@ocaml[foo]@@[\noutput {b foo}]@}\nbaz";
       [%expect
         {|
         ((output
           (((f.ml (1 0) (2 15))
-            (code_block (((f.ml (1 2) (1 7)) ocaml) ()) ((f.ml (1 8) (1 11)) foo)
+            (code_block (((f.ml (1 2) (1 7)) ocaml) ()) ((f.ml (1 8) (1 13)) foo)
              ((paragraph
                (((f.ml (2 0) (2 6)) (word output)) ((f.ml (2 6) (2 7)) space)
                 ((f.ml (2 7) (2 14)) (bold (((f.ml (2 10) (2 13)) (word foo))))))))))
@@ -2787,6 +2787,17 @@ let%expect_test _ =
           ( "File \"f.ml\", line 1, characters 0-8:\
            \nInvalid character ',' in language tag.\
            \nSuggestion: try '{@ocaml[ ... ]}'."))) |}]
+
+    let delimited_code_block =
+      test "{delim@ocaml[ all{}[2[{{]doo}}]]'''(* ]} ]delim}";
+      [%expect
+        {|
+          ((output
+            (((f.ml (1 0) (1 48))
+              (code_block (((f.ml (1 7) (1 12)) ocaml) ())
+               ((f.ml (1 13) (1 46)) "all{}[2[{{]doo@}]]'''(* ]@ ")))))
+           (warnings ())) |}]
+      
   end in
   ()
 
