@@ -680,14 +680,14 @@ and code_block start_offset content_offset metadata prefix delim input = parse
     { if delim = delim'
       then emit_code_block ~start_offset content_offset input metadata delim prefix true
       else
-        (Buffer.add_string prefix ("]" ^ delim' ^ "@");
+        (Buffer.add_string prefix ("]@" ^ delim' ^ "@[");
         code_block start_offset content_offset metadata prefix delim input lexbuf) }
   | "]" (language_tag_char* as delim') "}"
     { 
       if delim = delim'
       then emit_code_block ~start_offset content_offset input metadata delim prefix false
       else (
-        Buffer.add_string prefix ("]" ^ delim' ^ "@");
+        Buffer.add_string prefix ("]" ^ delim' ^ "}");
         code_block start_offset content_offset metadata prefix delim input lexbuf
       )
     }

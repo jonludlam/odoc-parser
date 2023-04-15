@@ -2795,7 +2795,17 @@ let%expect_test _ =
           ((output
             (((f.ml (1 0) (1 48))
               (code_block (((f.ml (1 7) (1 12)) ocaml) ())
-               ((f.ml (1 13) (1 46)) "all{}[2[{{]doo@}]]'''(* ]@ ")))))
+               ((f.ml (1 13) (1 46)) "all{}[2[{{]doo}}]]'''(* ]} ")))))
+           (warnings ())) |}]
+
+    let delimited_code_block_with_output =
+      test "{delim@ocaml[ foo ]@delim@[ ]@}";
+      [%expect
+        {|
+          ((output
+            (((f.ml (1 0) (1 28))
+              (code_block (((f.ml (1 7) (1 12)) ocaml) ())
+               ((f.ml (1 13) (1 25)) "foo ") ()))))
            (warnings ())) |}]
       
   end in
