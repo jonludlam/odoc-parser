@@ -7,6 +7,7 @@ type t = {
   warnings : Warning.t list;
   reversed_newlines : (int * int) list;
   original_pos : Lexing.position;
+  len : int;
 }
 
 (* odoc uses an ocamllex lexer. The "engine" for such lexers is the standard
@@ -85,17 +86,18 @@ let position_of_point : t -> Loc.point -> Lexing.position =
  fun v point ->
   let { reversed_newlines; original_pos; _ } = v in
   let line_in_comment = point.Loc.line - original_pos.pos_lnum + 1 in
-  let rec find_pos_bol reversed_newlines_prefix =
+  let rec find_pos_bol reversed_newlines_prefix max =
     match reversed_newlines_prefix with
     | [] -> assert false
-    | [ _ ] -> original_pos.pos_bol
+    | [ _ ] -> (original_pos.pos_bol, max + original_pos.pos_cnum)
     | (line_number, line_start_offset) :: prefix ->
-        if line_number > line_in_comment then find_pos_bol prefix
-        else line_start_offset + original_pos.pos_cnum
+        if line_number > line_in_comment then find_pos_bol prefix line_start_offset
+        else (line_start_offset + original_pos.pos_cnum, max + original_pos.pos_cnum)
   in
-  let pos_bol = find_pos_bol reversed_newlines in
+  let pos_bol, max = find_pos_bol reversed_newlines v.len in
   let pos_lnum = point.Loc.line in
   let pos_cnum = point.column + pos_bol in
+  if pos_cnum > max then raise (Invalid_argument "Invalid point");
   let pos_fname = original_pos.pos_fname in
   { Lexing.pos_bol; pos_lnum; pos_cnum; pos_fname }
 
@@ -114,7 +116,7 @@ let parse_comment ~location ~text =
     Stream.from (fun _token_index -> Some (Lexer.token input lexbuf))
   in
   let ast, warnings = Syntax.parse warnings token_stream in
-  { ast; warnings; reversed_newlines; original_pos = location }
+  { ast; warnings; reversed_newlines; original_pos = location; len = String.length text }
 
 (* Accessor functions, as [t] is opaque *)
 let warnings t = t.warnings
