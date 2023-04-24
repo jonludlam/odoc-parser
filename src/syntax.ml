@@ -903,20 +903,21 @@ let rec block_element_list :
         let block = Loc.at location block in
         let acc = block :: acc in
         consume_block_elements ~parsed_a_tag `After_text acc
-      | { value = `Code_block (meta, _delim, { value = s; location=v_loc }, has_outputs) as token; location } as next_token ->
+      | { value = `Code_block (meta, delim, { value = s; location=v_loc }, has_outputs) as token; location } as next_token ->
           warn_if_after_tags next_token;
           warn_if_after_text next_token;
           junk input;
-          let outputs, location =
+          let delimiter = if delim = "" then None else Some delim in
+          let output, location =
             if not has_outputs then (None, location) else
-              let content, _next_token, _where_in_line =
-               block_element_list In_code_results ~parent_markup:token input
-            in
-            junk input;
-            let locations = location :: (List.map (fun content -> content.Loc.location) content) in
-            let location = Loc.span locations in
-            let location = {location with end_={ location.end_ with column = location.end_.column + 1}} in
-            (Some content, location)
+              let content, next_token, _where_in_line =
+                block_element_list In_code_results ~parent_markup:token input
+              in
+              junk input;
+              let locations = location :: (List.map (fun content -> content.Loc.location) content) in
+              let location = Loc.span locations in
+              let location = {location with end_=next_token.location.end_} in
+              (Some content, location)
           in
 
 
@@ -924,7 +925,11 @@ let rec block_element_list :
             Parse_error.should_not_be_empty ~what:(Token.describe token) location
             |> add_warning input;
   
-          let block = accepted_in_all_contexts context (`Code_block (meta, {value=s; location=v_loc}, outputs)) in
+          let lang = match meta with
+            | None -> None
+            | Some (language, tags) -> Some { Ast.language; tags }
+          in
+          let block = accepted_in_all_contexts context (`Code_block { Ast.lang; delimiter; content={value=s; location=v_loc}; output }) in
           let block = Loc.at location block in
           let acc = block :: acc in
           consume_block_elements ~parsed_a_tag `After_text acc
